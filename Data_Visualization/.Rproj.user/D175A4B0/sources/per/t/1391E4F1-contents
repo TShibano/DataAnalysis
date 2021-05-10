@@ -1,0 +1,323 @@
+---
+title: "chapter_4 正しい数値の示し方"
+author: "Toshiki SHIBANO"
+date: "2021/2/5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gapminder)
+library(socviz)
+```
+
+## まえがき
+ggplotを使うときの注意点，複数の図に分割する方法やデータを計算・要約する方法などを扱う
+
+## 4.1 文法としては正しいが意味をなさない
+表示されても，記述した内容を確認する必要がある．
+
+## 4.2 グループ別データに対応する審美的要素
+
+```{r}
+# 国別の時系列データを描きたい
+p <- ggplot(data = gapminder,
+            mapping = aes(x = year, y = gdpPercap))
+p + geom_line()
+# ミスが起きても気にしない
+
+# 国別の時系列データ
+# 明示的にコードを書く必要がある
+# 大きな外れ値はクウェート
+p <- ggplot(data = gapminder,
+            mapping = aes(x = year, y = gdpPercap))
+p + geom_line(mapping = aes(group = country))
+
+# 大陸ごとに色分けした，国別のgdpPercapの時系列データ
+p <-  ggplot(data = gapminder,
+           mapping = aes(x = year, y = gdpPercap, color = continent))
+p + geom_line(mapping = aes(group = country))
+```
+
+
+## 4.3 複数の図を並べるためのfacet_関数群
+facet_関数群は対象の変数ごとに図を切り出して，パネル形式で出力するための関数群．
+
+```{r}
+# facet_wrap()関数を使って，大陸ごとに層別化された国の時系列データを一枚の図に納める．
+p <- ggplot(data = gapminder,
+            mapping = aes(x = year,
+                          y = gdpPercap))
+p + geom_line(mapping = aes(group = country)) + 
+    facet_wrap( ~ continent, ncol = 3)
+    
+# 黒い線は見にくいため変更する
+# その他色々変更する
+p <- ggplot(data = gapminder,
+            mapping = aes(x = year, y = gdpPercap))
+p + geom_line(color = "gray", mapping = aes(group = country)) + 
+    geom_smooth(size = 1.1, method = "loess", se = FALSE) + 
+    scale_y_log10(labels = scales::dollar) + 
+    facet_wrap( ~ continent, ncol = 3) + 
+    labs(x = "year", y = "log GDP per capita", 
+         title = "GDP per capita on Five Continents")
+
+# データを2種類のカテゴリ変数に基づいて相互に分類したい
+# 新たなデータセットgss_smを用いる
+# gss_sm: 米国の成人を対象とした社会科学者が興味のあるトピックについての質問調査票
+# socvizパッケージにある
+glimpse(gss_sm) # 変数の概要を確認
+p <- ggplot(data = gss_sm, 
+            mapping = aes(x = age, y = childs))
+# 縦方向に性別(sex), 横方向に人種(race)を層別した年齢別の子供の数
+p + geom_point(alpha = 0.2) + 
+    geom_smooth() + 
+    facet_grid(sex ~ race)
+```
+
+## 4.4 geomによるデータの変換
+geom_()関数はstat_関数と紐づけられている
+
+```{r}
+# 棒グラフ
+# geom_bar()の中でstat_count()関数により算出される
+p <- ggplot(data = gss_sm, mapping = aes(x = bigregion, fill = bigregion)) # colorだと縁だけしか変わらない
+p + geom_bar()
+
+# 割合グラフを作りたい場合
+# しかしこれだと全て1になる
+p <- ggplot(data = gss_sm, mapping = aes(x = bigregion, fill = bigregion))
+p + geom_bar(mapping = aes(y = after_stat(prop))) 
+
+# ダミーグループとして1を与える．
+# その場合，fillによる色分けは無効になっている(∵ グループが優先されるから？)
+p <- ggplot(data = gss_sm, mapping = aes(x = bigregion, fill = bigregion))
+p + geom_bar(mapping = aes(y = after_stat(prop), group = 1))
+
+# 各信仰がどれくらいの人がいるか
+table(gss_sm$religion)
+
+# これだと枠だけが色分けされる
+p <- ggplot(data = gss_sm, mapping = aes(x = religion, color = religion))
+p + geom_bar() +
+    guides(fill = "none") # これだと判例はなくならない
+
+
+p <- ggplot(data = gss_sm, mapping = aes(x = religion, fill = religion))
+p + geom_bar() + 
+    guides(fill = "none") # これで判例をなくすことが出来る
+# geom_bar(mapping = aes(fill = religion))
+# としても同じように出る
+
+```
+
+## 4.5 回りくどく度数分布表を描いてみる
+```{r}
+# 地域(bigregion)ごとの信仰(religion)の人の数
+p <- ggplot(data = gss_sm,
+            mapping = aes(x = bigregion,
+                          fill = religion))
+p + geom_bar()
+
+# しかしこのグラフは比較が困難(e.g. Catholicが分かりくい)
+# 比率のグラフにしよう
+
+p <- ggplot(data = gss_sm, 
+            mapping = aes(x = bigregion,
+                          fill = religion))
+p + geom_bar(position = "fill") # このfillは審美的要素ではない
+
+# しかしこのグラフでは相対的な大きさを評価出来ない
+# 各地域内の信仰の割合を比較することは可能
+p <- ggplot(data = gss_sm, 
+            mapping = aes(x = bigregion, 
+                          fill = religion))
+p + geom_bar(position = "dodge") # position = "dodge"とすることで横並びになる
+
+# あとは割合になるようにafter_stat(prop)を用いる
+# その際にはグループをグループ化したい変数(religionで指定する)
+p <- ggplot(data = gss_sm,
+            mapping = aes(x = bigregion, fill = religion))
+p + geom_bar(position = "dodge",
+             mapping = aes(y = after_stat(prop), group = religion))
+
+# このグラフは各地域ごとの割合の合計が1となるのではなく，
+# それぞれの信仰の合計が1とした各地域別の信仰の割合となる
+# つまり，信仰をJweishと答えた人の5割は北東部に住んでいることが分かる
+
+# しかしながら，これも当初作りたかったグラフではない
+#  それぞれの項目を横並びにして，それぞれの高さを比較したい
+# facet_warpを使って地域を層別する
+p <- ggplot(data = gss_sm, 
+            mapping = aes(x = religion))
+p + geom_bar(position = "dodge",
+             mapping = aes(y = after_stat(prop), group = bigregion)) + 
+    facet_wrap( ~ bigregion, ncol = 2)
+
+```
+
+頻度をプロットする場合，ggplotで全てを行おうとすると沼にハマりがち．dplyrパッケージを使った方が信頼性が高く，エラーの確認も容易な方法になる．それは第5章で述べる．
+
+## 4.6 ヒストグラムと密度プロット
+連続量をヒストグラムとして描く時は，binを指定する必要がある(デフォルトはbins = 30)．ヒストグラムのbinは注意が必要
+```{r}
+# midwestデータを用いる
+glimpse(midwest)
+
+p <- ggplot(data = midwest, 
+            mapping = aes(x = area))
+p + geom_histogram(bins = 10) # bins: binの数
+p + geom_histogram(binwidth = 0.01) # binwidth: binの幅
+
+
+# 複数のヒストグラムをまとめて図示できる．
+oh_wi <- c("OH", "WI") # OH と WI の2州だけを取り出す
+p <- ggplot(data = subset(midwest, subset = state %in% oh_wi),
+            mapping = aes(x = percollege, fill = state))
+p + geom_histogram(alpha = 0.4, bins = 20)
+
+# カーネル密度推定を使うのも手
+p <- ggplot(data = midwest, 
+            mapping = aes(x = area))
+p + geom_density()
+
+
+# 州で色分け
+# fillは密度曲線の本体に対して，colorは線に対して効果を示す
+p <- ggplot(data = midwest,
+            mapping = aes(x = area, fill = state, color = state))
+p + geom_density(alpha = 0.1)
+
+# 重なって見にくい場合，geom_line(stat = "density")を使うことで線だけにできる
+p <- ggplot(data = midwest, 
+            mapping = aes(x = area, color = state))
+p + geom_line(stat = "density")
+
+# geom_bar()のように，geom_histgram()やgeom_density()でも相対値を求めることも可能
+p <- ggplot(data = midwest, 
+            mapping = aes(x = area, color = state, fill = state))
+p + geom_density(alpha = 0.3, 
+                 mapping = aes(y = after_stat(scaled)))
+
+# countは密度とデータ点の数をかけ合わせた統計量を返す
+p <- ggplot(data = midwest, 
+            mapping = aes(x = area, color = state, fill = state))
+p + geom_density(alpha = 0.3, 
+                 mapping = aes(y = after_stat(count)))
+
+```
+
+
+## 4.7 不要な変換を避ける
+得られたデータがすでに要約されている場合など，変換を避けたい場合はstat = "identity"と記述する
+```{r}
+# titanic: タイタニック号の生存者に関するデータ
+titanic
+
+# タイタニックデータにおける性別ごとの生存者割合
+p <- ggplot(data = titanic,
+            mapping = aes(x = fate, y = percent, fill = sex))
+p + geom_bar(position = "dodge", stat = "identity") +  # 対象となる変数に対して変換しない場合はstat = "identity"とする
+    theme(legend.position = "top")
+# 代わりに，geom_colを使える
+p + geom_col(position = "dodge")
+
+# oecd_sum: アメリカおよびOECD諸国の出生時の平均寿命に関連する情報
+# otherカラムはアメリカ合衆国以外の平均寿命
+# socvizパッケージにある
+glimpse(oecd_sum)
+oecd_sum
+
+p <- ggplot(data = oecd_sum,
+            mapping = aes(x = year, y = diff, fill = hi_lo))
+p + geom_col() + 
+    guides(fill = "none") + # 凡例を消す
+    labs(x = NULL, y = "Different in years", 
+         title = "The US Life Expectancy Gap",
+         subtitle = "Dofference between US and OECD average life expectancy, 1960-2015",
+         caption = "Data: OECD. After a chart by Christpher Ingraham, Washington Post, December 27th 2017"
+         )
+```
+
+## 4.8 次の一手
+```{r, }
+# gapminderデータセットに対して，色々な変数に対して，facetによる層別化を試す
+glimpse(gapminder)
+unique(gapminder$country)
+unique(gapminder$year)
+
+# 年代を層別したの人口とGDPの散布図
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = pop, y = gdpPercap, fill = year))
+p.out <- p + geom_point() + 
+             facet_wrap(~ year, ncol = 2) + 
+             guides(fill = "none")
+ggsave(filename = "pop_gdp_facet_year.pdf", plot = p.out)
+
+# 
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = pop, y = gdpPercap, color = year))
+p.out <- p + geom_point() + 
+             scale_x_log10() + 
+             facet_wrap(~ country, ncol = 4)
+ggsave(filename = "pop_gdp_year_facet_country.jpg", plot = p.out, 
+       height = 40, width = 20, units = "in")
+
+# facet_gridとfacet_wrapについて考察する
+# gss_smデータセットを用いる
+# xはage，yはchildsで，sexとraceで層別
+glimpse(gss_sm)
+colnames(gss_sm)
+p <- ggplot(data = gss_sm, 
+            mapping = aes(x = age, y = childs))
+p1 <- p + geom_point() + 
+          facet_grid(sex ~ race) + 
+          labs(title = "facet_grid: sex ~ race")
+p2 <- p + geom_point() + 
+          facet_grid(~ sex + race) + 
+          labs(title = "facet_grid: ~ sex + race")
+p3 <- p + geom_point() + 
+          facet_wrap(~ sex + race) + 
+          labs(title = "facet_wrap: ~sex + race")
+
+# 見やすいように一つのグラフにまとめる
+gridExtra::grid.arrange(p1, p2, p3)
+p.all <- ggpubr::ggarrange(p1, p2, p3) # ggpubr::ggarrange()は複数のプロットを一枚のプロットにする方法
+ggsave(filename="comparison_facet.pdf", plot = p.all,
+       height = 10, width = 10, units = "in")
+
+# 累積折れ線グラフ
+# 観測数を棒で表示する代わりに連続した線で表示するもの
+colnames(midwest)
+p <- ggplot(data = midwest,
+            mapping = aes(x = area))
+p1 <- p + geom_histogram(binwidth = 0.01)
+p2 <- p + geom_freqpoly(binwidth = 0.01)
+p.all <- ggpubr::ggarrange(p1, p2)
+p.all
+ggsave(filename = "histgram_freqpoly.png", plot = p.all,
+       height = 10, width = 10, units = "in")
+
+# 密度推定
+p <- ggplot(data = midwest,
+            mapping = aes(x = area, fill = state, color = state))
+p + geom_density(alpha = 0.1)
+
+p <- ggplot(data = midwest, 
+            mapping = aes(x = percollege, y = percbelowpoverty))
+p + geom_point(alpha = 0.2) + 
+    geom_density2d()
+p + geom_density2d()
+p + geom_density_2d_filled()
+
+```
+
+
+
+
+
+
+
+
+

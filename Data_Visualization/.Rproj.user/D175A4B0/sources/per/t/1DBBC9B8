@@ -1,0 +1,27 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1612498579212.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "70295471",
+    "id" : "1DBBC9B8",
+    "lastKnownWriteTime" : 1612505786,
+    "last_content_update" : 1612505786786,
+    "path" : "~/Data_Analysis/データ分析のためのデータ可視化入門/Data_Visualization/Ja_test.Rmd",
+    "project_path" : "Ja_test.Rmd",
+    "properties" : {
+        "cursorPosition" : "12,0",
+        "marks" : "<:4,0\n>:9,-1",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

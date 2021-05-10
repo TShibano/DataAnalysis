@@ -1,0 +1,283 @@
+---
+title: "chapter_7 地図を描画する"
+author: "Toshiki SHIBANO"
+date: "3/24/2021"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gapminder)
+library(socviz)
+library(ggrepel)
+```
+
+## はじめに
+階級区分図(choropleth maps)
+- 変数の値を元に地理的な領域の投球分けを行い，色や陰影の違いを表現する図
+注意点
+- 関心が空間的部分にむく
+- データを表現する際に決める選択肢が多くなる
+
+## 7.1 アメリカ合衆国の週単位での地図
+
+```{r}
+glimpse(election)
+head(election)
+election %>% select(state, total_vote,
+                    r_points, pct_trump, party, census) %>% 
+  slice_sample(n = 5)
+
+# 図7.2
+# 共和党が赤，民主党が青
+party_colors <- c("#2E74C0", "#CB454A")
+
+p0 <- ggplot(data = subset(election, st %nin% "DC"),
+             mapping = aes(x = r_points,
+                           y = reorder(state, r_points),
+                           color = party))
+p1 <- p0 + geom_vline(xintercept = 0,
+                      color = "gray30") + 
+  geom_point(size = 2)
+p2 <- p1 + scale_color_manual(values = party_colors) + 
+           scale_x_continuous(breaks = c(-30, -20, -10, 0, 10, 20, 30, 40),
+                              labels = c("30\n (Clinton)", "20", "10", "0",
+                                         "10" , "20", "30", "40\n (Trump)"))
+p2 + facet_wrap(~ census, ncol = 1, scales = "free_y") + 
+     guides(color = "none") + 
+     labs(x = "Point Margin", y = "") + 
+     theme(axis.text = element_text(size = 8))
+```
+この図の情報量はどうだろうか．
+- 空間データを必ずしも空間構造として表現する必要はない．ドットプロットで大丈夫な時もある
+- 途中のグラフを確認することも大事
+
+アメリカ合衆国の地図を作成する
+```{r map of USA}
+library(maps)
+us_state <- map_data("state")
+head(us_state)
+p <- ggplot(data = us_state,
+            mapping = aes(x = long, y = lat, group = group))
+p + geom_polygon(fill = "white", color = "black")
+
+# 州ごとに色分けする
+p <- ggplot(data = us_state,
+            mapping = aes(x = long, y = lat, group = group,
+                          fill = region))
+p + geom_polygon(color = "gray90", size = 0.1) + 
+    guides(fill = "none")
+
+# アルベルス正積円錐図法
+p <- ggplot(data = us_state,
+            mapping = aes(x = long, y = lat,
+                          group = group, fill = region))
+p + geom_polygon(color = "gray80", size = 0.1) + 
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) + 
+    guides(fill = "none")
+```
+
+地図の上にデータをマップしていく
+- 地図データとマッピングのデータを結合する．この作業は非常に難しい
+
+```{r}
+# 地図データの州名は小文字
+unique(us_state$region)
+# electionデータの州名は大文字
+unique(election$state)
+# 少しでも違うと結合出来ないので，丁寧に合わせる
+election$region <- tolower(election$state)
+us_states_elec <- left_join(us_state, election)
+head(us_states_elec, n = 20)
+
+# 州ごとの選挙結果の色分け
+p <- ggplot(data = us_states_elec, 
+            mapping = aes(x = long, y = lat, group = group, fill = party))
+p + geom_polygon(color = "gray80", size = 0.1) + 
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+
+# グラフを洗練される
+p0 <- ggplot(data = us_states_elec,
+            mapping = aes(x = long, y = lat, group = group, fill = party))
+p1 <- p0 + 
+      geom_polygon(color = "gray80", size = 0.1) + 
+      coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+p2 <- p1 + 
+      scale_fill_manual(values = party_colors) + 
+      labs(title = "Election Results 2016", fill = NULL)
+p2 + ggthemes::theme_map()
+
+# 数値的な割合の可視化
+# トランプが獲得した表の割合
+p0 <- ggplot(data = us_states_elec,
+             mapping = aes(x = long, y = lat, group = group, fill = pct_trump))
+p1 <- p0 + 
+      geom_polygon(color = "gray80", size = 0.1) + 
+      coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+p2 <- p1 + 
+      labs(title = "Trump vote", fill = "Percent") + 
+      ggthemes::theme_map() 
+p2
+# このままだと数値が小さい方が濃くなっている
+p3 <- p2 + 
+      scale_fill_gradient(low = "white", high = "#CB454A")
+p3
+
+# さらに色分けしたい場合
+# 対立する2党への投票の傾向を中間色を入れて二つの色で分ける
+p0 <- ggplot(data = us_states_elec,
+             mapping = aes(x = long, y = lat, group = group, fill = d_points))
+p1 <- p0 + 
+      geom_polygon(color = "gray80", size = 0.1) + 
+      coord_map(projection = "albers", lat0 = 39, lat1 = 45)
+p2 <- p1 + 
+      labs(title = "Winning margins", fill = "Percent")  + 
+      ggthemes::theme_map()
+p2 + scale_fill_gradient2(low = "red", high = "blue", breaks = c(-25, 0, 25, 50, 75))
+
+p2 + scale_fill_gradient2(low = "red", 
+                          mid = scales::muted("purple"),
+                          high = "blue",
+                          breaks = c(-25, 0, 25, 50, 75))
+
+# ワシントンD.C.を抜いてみる
+# ワシントンD.C.は民主党が非常に強いので，中間色の位置がぶれるため
+p0 <- ggplot(data = subset(us_states_elec,
+                           region %nin% "district of columbia"),
+             mapping = aes(x = long, y = lat, group = group, fill = d_points))
+p1 <- p0 +  
+      geom_polygon(color = "gray80", size = 0.1) + 
+      coord_map(projection = "albers", lat0 = 39, lat1 = 45) + 
+      ggthemes::theme_map()
+p2 <- p1 + 
+      scale_fill_gradient2(low = "red",
+                           mid = scales::muted("purple"),
+                           high = "blue") + 
+      labs(title = "Winning margins",
+           fill = "Percent")
+p2
+```
+
+
+## 7.2 階級区分に頼らないアメリカ合衆国の地図
+アメリカ合衆国の階級区分図は，人口密度による効果を強く反映する  
+階級区分図はいくつもある情報のうち一つしか示さないため，読み取るには注意が必要である．
+すなわち，作り手が読み手に誤解が生まれないように意識して作成する必要がある．
+
+群単位でのアメリカ合衆国の階級区分図を作成する．  
+county_mapデータセット: socvizパッケージ．郡地図であり，アルベルス正積円錐図法に変換済み．アラスカとハワイの位置は左下にくるように調整済み
+county_dataデータセット: socvizパッケージング．郡ごとのデータが入っている
+
+まずは人口密度を描く．
+```{r}
+county_map %>% slice_sample(n = 5)
+county_map
+# 
+?county_data
+county_data %>% 
+  select(id, name, state, pop_dens, pct_black) %>% 
+  slice_sample(n = 5)
+head(county_data)
+# id == 0はアメリカ合衆国を表現し，
+# id == 01000はアラバマ州に対応している
+county_data[county_data$id == "02000", ]
+# county_mapには国や州のデータはないため，
+# 結合する時に除外される
+
+head(county_map)
+head(county_data)
+# 結合させる
+county_full <- left_join(county_map, county_data, by = "id")
+head(county_full)
+
+
+p <- ggplot(data = county_full, 
+            mapping = aes(x = long, y = lat,
+                          group = group, fill = pop_dens))
+p1 <- p + 
+      geom_polygon(color = "gray80", size = 0.1) + 
+      ggthemes::theme_map()
+p1
+# 人口密度を順序尺度と認識していない
+# scale_fill_brewer()関数を使って，手動でスケールを調整する
+p2 <- p1 + 
+      scale_fill_brewer(palette = "Reds",
+                        labels = c("0-10", "10-50", "50-100", "100-500",
+                                   "500-1,000", "1,000-5,000", ">5,000"))
+
+p2 + labs(title = "Population per \nsquare mile") + 
+     guides(fill = guide_legend(nrow = 1)) + 
+     theme(legend.position = "bottom")
+
+# 郡ごとのアフリカ系アメリカ人割合
+p0 <- ggplot(data = county_full,
+             mapping = aes(x = long, y = lat,
+                           group = group,
+                           fill = pct_black))
+p1_1 <- p0 + 
+        geom_polygon(color = "gray80", size = 0.1) + 
+        ggthemes::theme_map()
+p1 <- p0 + 
+      geom_polygon(color = "gray80", size = 0.1) + 
+      ggthemes::theme_map() + 
+      coord_equal() # マップの相対的な縮尺が変化しないことを保証する
+
+ggpubr::ggarrange(p1, p1_1)
+
+p1
+p2 <- p1 + 
+      scale_fill_brewer(palette = "Greens")
+p2 + labs(fill = "US Population, Percent Black") + 
+     guides(fill = guide_legend(nrow = 1)) + 
+     theme(legend.position = "bottom")
+```
+
+郡単位での銃による自殺者と人口密度のグラフを描き横に並べる
+カラーパレットを統一させるため，人口密度が低いほど濃くなるようにする
+
+```{r gun and density, fig.width=5, fig.height=5}
+# カラーパレットの生成および反転
+orange_pal <- RColorBrewer::brewer.pal(n = 6, name = "Oranges")
+orange_rev <- rev(orange_pal)
+
+unique(colnames(county_full))
+# 銃による自殺者
+gun_p <- ggplot(data = county_full,
+                mapping = aes(x = long, y = lat,
+                              group = group,
+                              fill = su_gun6))
+gun_p1 <- gun_p + 
+          geom_polygon(color = "gray90", size = 0.1) + 
+          coord_equal() + 
+          scale_fill_manual(values = orange_pal) + 
+          labs(title = "Gun-Related Suicides, 1999-2015",
+               fill = "Rate per 100,000 pop") + 
+          ggthemes::theme_map()
+gun_p1
+
+pop_p <- ggplot(data = county_full, 
+                mapping = aes(x = long, y = lat,
+                              group = group,
+                              fill = pop_dens6))
+pop_p1 <- pop_p + 
+          geom_polygon(color = "gray90", size = 0.1) + 
+          coord_equal() + 
+          scale_fill_manual(values = orange_rev) + 
+          labs(title = "Reverse-coded Population Density",
+               fill = "People per square mile")  + 
+          ggthemes::theme_map()
+pop_p1
+
+ggpubr::ggarrange(gun_p1, pop_p1, ncol = 1)
+```
+
+この例におけるグラフを描くときの注意点
+- データの取り方を把握する
+  - 自殺者が年間10人未満の場合，報告されない(非公開の扱い)→単に0としてグラフを書いて良いのか？
+  - 但し書きをつける，その地域のデータを載せない
+- 一度グラフを描いてしまうと，後からこうした問題を検出するのは困難
+  - 変数コーディングの時に気をつける．
+
+
+## 7.3 地理的な空間配置を考慮したグラフ

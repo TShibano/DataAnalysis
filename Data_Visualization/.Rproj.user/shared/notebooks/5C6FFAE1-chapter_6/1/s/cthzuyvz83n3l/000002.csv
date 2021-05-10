@@ -1,0 +1,7 @@
+"0","# 限界効果を可視化するパッケージ
+library(margins)
+"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"

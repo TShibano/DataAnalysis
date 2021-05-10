@@ -1,0 +1,652 @@
+---
+title: "chapter_6 モデルデータの可視化"
+author: "Toshiki SHIBANO"
+date: "3/22/2021"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gapminder)
+library(socviz)
+library(ggrepel)
+```
+
+## はじめに
+- ggplotのgeomを使って統計モデリングの結果の可視化を行う
+- broomやmarginsパッケージを用いて，作成したモデルから推定値をtidyデータにして，可視化する
+
+
+```{r}
+glimpse(gapminder)
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = log(gdpPercap), y = lifeExp))
+
+# 線形回帰モデルとロバスト線形回帰モデル
+p + geom_point(alpha = 0.1) + 
+    geom_smooth(color = "tomato", fill = "tomato", method = MASS::rlm) + 
+    geom_smooth(color = "steelblue", fill = "steelblue", method = "lm")
+
+# 多項式回帰モデル
+p + geom_point(alpha = 0.1) + 
+    geom_smooth(color = "red", fill = "red", method = "lm", size = 1.2,
+                formula = y ~ splines::bs(x, df = 3))
+
+# 分位点回帰モデル
+p + geom_point(alpha = 0.1) + 
+    geom_quantile(color = "red", size = 1.2, method = "rqss",
+                  lambda = 1, quantils = c(0.20, 0.5, 0.85))
+```
+
+## 6.1 複数の回帰直線を凡例付きで一度に図示する
+複数の回帰直線をそれぞれ別の設定で重ねることは可能．
+しかしながら，凡例はデータの内部で結びついているわけではないから．
+
+1. geom_smooth()関数中のcolorとfill引数に文字列でモデル名をマッピングする
+2. scale_color_manual()関数とscale_fill_manual()関数を組み合わせて判例をつける
+
+```{r}
+# 色の獲得
+model_colors <- RColorBrewer::brewer.pal(3, "Set1")
+model_colors
+
+p0 <- ggplot(data = gapminder,
+             mapping = aes(x = log(gdpPercap), y = lifeExp))
+p1 <- p0 + 
+      geom_point(alpha = 0.2) + 
+      geom_smooth(method = "lm", aes(color = "OLS", fill = "OLS")) + 
+      geom_smooth(method = "lm", formula = y ~ splines::bs(x, df = 3),
+                  aes(color = "Cubic Spline", fill = "Cubic Spline")) + 
+      geom_smooth(method = "loess", aes(color = "loess", fill = "loess"))
+p1 + scale_color_manual(name = "Models", values = model_colors) + 
+     scale_fill_manual(name = "Models", values = model_colors) + 
+     theme(legend.position = "top")
+```
+
+- aes()関数は変数を審美的要素にマッピングする
+それを利用して，回帰線を審美的要素にマッピングし，
+scale_color_manual()，scale_fill_manual()関数を呼び出して，
+判例をつける
+
+
+## 6.2 モデルオブジェクトの中身を確認する
+本書では，データにあてはまるモデルを選択し，ggplotを使って情報を抽出，可視化する方法のみを述べる
+
+- Gelman & Hill(2018)ーRによる統計モデリングの詳細
+- Harrell(2016)，Gelman(2004)ーモデリングと可視化の関係について実践的な内容
+
+Rでは常にオブジェクトを操作している．
+オブジェクトは名前付きの部分構造(数値やベクトル，formulaなど)を持っているので，簡単にアクセスできる
+
+```{r}
+gapminder
+str(gapminder)
+```
+
+Rの統計モデルオブジェクトも内部にモデルの結果を格納しているが，複雑である
+
+```{r OLS}
+# 国と調査年の間に構造的な関係がある場合，線形モデルは正しくない？
+out <- lm(formula = lifeExp ~ gdpPercap + pop + continent,
+          data = gapminder)
+# formula記法
+# 従属変数 ~ 独立変数
+
+# summary()関数を使うことでモデルの概要がわかる
+summary(out)
+
+# str()関数を使うことでモデルオブジェクトの構造がわかる
+str(out)
+```
+
+
+## 6.3 モデルから図に使えるデータを正しく抽出する
+モデルの結果を効果的に可視化するのは難しい．
+なぜならばモデルの結果を示す際にはデータの背景知識に基づく知見とモデルの解釈の両方が必要になるから
+
+モデルの推定値の図示はモデルの適切な推定と深く関わっているため，統計をしっかり学ぶ以外に作図のスキルをあげる方法はありません．
+**モデルの中身を理解しないまま可視化するのはやめる**
+
+### 6.3.1 適切な用語による調査結果の説明
+モデルの可視化を適切に行えれば，分析で得ようとしている問題に対して実質的に意味があり，かつ直接結果を解釈できる図が得られる．
+解釈可能な結果を示したいなら，読み手が容易に理解できる尺度を使う必要がある．
+
+### 6.3.2 信頼度の可視化
+結果の不確実性や信頼度をはっきりと可視化する図を作るのは難しい．
+モデル推定にはさまざまな指標(精度，信頼区間，信用区間，有意性など)が用いられるが，
+これらの情報が本来持っている情報量以上に過信する傾向があり，
+解釈を誤ったり，結果から言えること以上のことを言ってしまいがち
+
+### 6.3.3 どんなデータを可視化するのか
+多変量モデルの結果の図示．
+- 回帰係数の氷河実際にどういう意味なのかを，有意性や傾きの大きさを示し，重要度で分類する
+- 単純なモデルの回帰係数ではなく，関心のある範囲におけるいくつかの変数の予測値を示すこと
+  - 元データの上から，モデルの推定値を元データに組み合わせて，可視化する
+
+## 6.4 予測の図示
+Rで用いられる関数はさまざまなオブジェクトに対して汎用的に使うことができる．
+
+predict()関数: モデルオブジェクトから予測値を生成する関数
+
+```{r}
+# モデルの作成
+out <- lm(formula = lifeExp ~ gdpPercap + pop + continent,
+          data = gapminder)
+
+# 予測するための新しいデータの作成
+min_gdp <- min(gapminder$gdpPercap)
+max_gdp <- max(gapminder$gdpPercap)
+med_pop <- median(gapminder$pop)
+
+# 他らしいデータの作成
+pred_df <- expand.grid(gdpPercap = (seq(from = min_gdp,
+                                        to = max_gdp,
+                                        length.out = 100)),
+                       pop = med_pop,
+                       continent = c("Africa", "Americas",
+                                     "Asia", "Europe", "Oceania"))
+dim(pred_df)
+head(pred_df)
+
+# 予測
+pred_out <- predict(object = out,
+                    newdata = pred_df,
+                    interval = "predict")
+head(pred_out)
+
+# 予測のためのデータと予測結果を結合させる
+pred_df <- cbind(pred_df, pred_out)
+pred_df
+
+# モデルの結果を表示する
+# アフリカとヨーロッパだけ
+
+p <- ggplot(data = subset(pred_df, continent %in% c("Africa", "Europe")),
+            mapping = aes(x = gdpPercap, y = fit, 
+                          ymin = lwr, ymax = upr,
+                          color = continent, fill = continent,
+                          group = continent))
+p + geom_point(data = subset(gapminder, continent %in% c("Africa", "Europe")),
+               mapping = aes(x = gdpPercap, y = lifeExp,
+                             color = continent),
+               alpha = 0.5, inherit.aes = FALSE) + 
+    geom_line() + 
+    geom_ribbon(alpha = 0.2, color = NA) + 
+    scale_x_log10(labels = scales::dollar)
+```
+実際にpredict()関数を使うよりも便利なパッケージを使うことが多い．
+しかしながら，predict()a関数は様々なモデルに対して安全に動作するので，
+predict()関数を理解するのは重要．
+
+## 6.5 brromパッケージによるtidyなモデルオブジェクトの取り扱い
+broomパッケージ
+- Rが生成したモデルから作図に使える数値を抽出するための関数を集めたパッケージ
+- 主な用途はモデルオブジェクトをggplotで使いやすいデータフレームに変換すること
+  1. モデル自体の構成要素に関わる情報(回帰係数やt検定量など)
+  2. モデルと元データとの関係を表す観測ベースの情報(各観測値の近似値や残差)
+  3. モデルの当てはまりに関する情報(F統計量，モデルの逸脱度，決定係数など)
+```{r}
+library(broom)
+```
+
+### 6.5.1 tidy()関数によるモデルの構成要素レベルの情報の抽出
+
+```{r}
+# 線形モデルの作成
+out <- lm(formula = lifeExp ~ gdpPercap + pop + continent,
+          data = gapminder)
+summary(out)
+
+# モデルの構成要素レベルの抽出
+out_comp <- tidy(out)
+out_comp
+
+# round_df: socvizパッケージ
+out_comp %>% as.data.frame() %>% round_df()
+
+#線形回帰モデルの推定料の図示
+p <- ggplot(data = out_comp,
+            mapping = aes(x = term, y = estimate))
+p + geom_point() + 
+    coord_flip()
+
+# 推定値の信頼区間を求める
+out_conf <- tidy(out, conf.int = TRUE)
+out_conf %>% as.data.frame() %>% round_df()
+
+# 切片を削除する
+out_conf <- subset(out_conf, term %nin% "(Intercept)")
+# 大陸名を調整する
+out_conf$nicelabs <- prefix_strip(out_conf$term, "continent")
+out_conf
+p <- ggplot(data = out_conf,
+            mapping = aes(x = reorder(nicelabs, estimate),
+                          y = estimate,
+                          ymin = conf.low, ymax = conf.high))
+p + geom_pointrange() + 
+    coord_flip()
+
+```
+
+### 6.5.2 augment()関数による観測要素レベルのモデル情報の抽出
+augment()関数: 元データの観測レベルから計算される統計量．変数名の先頭には.がついている
+
+```{r}
+out_aug <- augment(out)
+head(out_aug)　%>% as.data.frame() %>% round_df()
+
+# augment()関数の引数にdataを指定すると，変数全てを追加できる
+out_aug <- augment(out, data = gapminder)
+head(out_aug) %>% as.data.frame() %>% round_df()
+
+# 予測値 vs 残差プロット
+p <- ggplot(data = out_aug,
+            mapping = aes(x = .fitted, y = .resid))
+p + geom_point()
+```
+
+### 6.5.3 glance()関数によるモデルレベルの情報の抽出
+glance()関数: モデルオブジェクトにsummary()関数を適用した時の結果を整理するための関数．
+真の力はデータをグループ化したり，モデルの一部を抽出してスケールアップができたりする点にある
+```{r}
+glance(out)
+```
+
+しかし，broomパッケージのtidy()，augment()，glance()関数は全てのクラスのモデルに対して，全ての機能を使えるわけではない
+
+```{r cox比例ハザードモデル}
+library(survival)
+head(lung)
+?lung
+# Surv()関数を使ってCox比例ハザードモデルの応答変数，アウトカムの変数を作成し，
+# 次のcpxph()関数で予測値を算出する
+out_cph <- coxph(Surv(time, status) ~ age + sex,
+                 data = lung)
+
+# survfit()関数をつかって，モデルから生存曲線を作成する
+out_surv <- survfit(out_cph)
+summary(out_surv)
+
+# 予測した生存曲線を作図する
+out_tidy <- tidy(out_surv)
+out_tidy
+p <- ggplot(data = out_tidy,
+            mapping = aes(x = time,
+                          y = estimate))
+p + geom_line() + 
+    geom_ribbon(mapping = aes(ymin = conf.low,
+                              ymax = conf.high),
+                alpha = 0.2) + 
+    labs(title = "Kaplan-Meier method")
+```
+備考
+
+カプランマイヤー法  
+イベントが発生するまでの時間(生存時間)分析する生存時間分析の手法．
+期間内にイベントが起きなかった例を「打ち切り」として分析に含めることが出来る．  
+例  
+手術から再発までの時間を分析する際に，途中で転院したり，治療を中断したケースは，少なくとも再発していないためイベントに該当しないが，欠損値として分析から除外するとバイアスがかかる．打ち切り例は，イベントが起きる(打ち切りになる)までは生存率の計算に寄与し，打ち切り後はケースから除外される
+
+
+
+## 6.6 グループ化したデータの分析およびリスト列の取り扱い
+broomパッケージを使うと，データのサブセットにモデルを適用し，
+それぞれのサブセットごとに当てはめたモデルの結果をまとめた表を作ることが可能
+
+```{r}
+# gapminderデータセットから1977年のEuropeのデータを抽出し
+# モデルを作成する
+eu77 <- gapminder %>% filter(continent == "Europe", year == 1977)
+fit <- lm(formula = lifeExp ~ log(gdpPercap),
+          data = eu77)
+summary(fit)
+fit_comp <- tidy(fit, conf.int = TRUE)
+fit_comp
+# 推定値の信頼区間を求める
+p <- ggplot(data = fit_comp,
+            mapping = aes(x = term,
+                          y = estimate,
+                          ymin = conf.low,
+                          ymax = conf.high))
+p + geom_pointrange() + 
+    coord_flip()
+
+```
+
+dplyrとbroomを使うことで大陸ー年ごとに層別化されたデータを
+コンパクトかつtidyな方法で処理・解析できる
+```{r}
+#nest: tidyrパッケージの関数
+
+out_le <- gapminder %>%
+  group_by(continent, year) %>%
+  nest() # .key で名前を変更できる
+head(out_le)
+?nest
+# nest()関数によって，
+# 表形式のまま複雑なオブジェクト(リスト)を保存することができる
+# unnestを使って対象のデータを取り出すことが可能
+out_le %>% filter(continent == "Europe" & year == 1977)%>% 
+  unnest(cols = c(data))
+
+# リスト列は，
+# 1. 列内のオブジェクトに対してまとめて簡潔かつtidyな操作ができる
+
+# まずfit_ols関数を作成し，対象のデータフレームに対して線形モデルを実行することが可能
+fit_ols <- function(df){
+  lm(formula = lifeExp ~ log(gdpPercap),
+     data = df)
+}
+# fit_ols関数を，リスト列を含むそれぞれの行に順番にmapする
+out_le <- gapminder %>%
+  group_by(continent, year) %>%
+  nest() %>%
+  mutate(model = map(data, fit_ols))
+
+out_le %>% filter(continent == "Asia" & year == 1977) %>%
+  unnest(cols = c(data))
+  
+
+# 初めから一回で行う
+# やることをまとめると
+# 1. (大陸+年代)別に線形モデル作成する
+# 2. それぞれのモデルから要約統計量を抽出する
+# 3. この結果のネストを解除して，切片項とオセアニアデータを削除する(前者は便宜上，後者は国が少ないから)
+fit_ols <- function(.df){
+  lm(formula = lifeExp ~ log(gdpPercap),
+     data = .df)
+}
+out_tidy <- gapminder %>%
+  group_by(continent, year) %>%
+  nest() %>%
+  mutate(model = map(data, fit_ols),
+         tidied = map(model, tidy)) %>%
+  unnest(tidied) %>% 
+  select(!c(data, model)) %>% # data列とmodel列はいらない
+  filter(term %nin% "(Intercept)",
+         continent %nin% "Oceania")
+out_tidy %>% as.data.frame() %>%
+  round_df() %>% slice_sample(n = 5, replace = TRUE)
+
+# 以上のコードにより，
+# 大陸内で各年ごとに一人当たりの対数変換されたGDPと平均寿命との関係について解析した回帰分析の結果がtidyな形で得られた
+
+# 得られたモデルの推定値はそれらのグループを確認し，図示する為に利用する
+
+# 大陸ごとに層別した年区切りのGDPと平均寿命の関係における推定値
+p <- ggplot(data = out_tidy,
+            mapping = aes(x = year, y = estimate,
+                          ymin = estimate - 2*std.error,
+                          ymax = estimate + 2*std.error,
+                          group = continent, color = continent))
+p + geom_pointrange(position = position_dodge(width = 1)) + # すこしずらす
+    scale_x_continuous(breaks = unique(gapminder$year)) + # 調査年に合わせる
+    theme(legend.position = "top") + 
+    labs(x = "Year", y = "Estimate", color = "Continent")
+    
+```
+
+## 6.7 限界効果の可視化
+モデルの偏効果・限界効果を推定して図示することが，
+モデルを正確に解釈し，有用な予測を示すための一般的な方法
+
+限界効果: 説明変数が一単位ふえたときの目的変数の増加量
+
+偏効果: 他の独立した説明変数の値が固定されている時に，説明変数が一単位増えた場合の目的変数の増加量
+
+```{r}
+# 限界効果を可視化するパッケージ
+library(margins)
+```
+
+これから行うこと
+扱うデータセット
+- gss_sm: アメリカ合衆国の一般的な社会調査データ
+目的変数
+- obama: オバマに投票した場合に1, それ以外は0
+説明変数
+- age(年齢): 離散値
+- polviews(リベラル・保守の傾向): Extremely Conservative ~ Extremely Liberal. Moderateが参照カテゴリ
+- race(人種): White, Black, Other. Whiteが参照カテゴリ
+- sex(性別): Male, Female. Maleが参照カテゴリ
+※参照カテゴリ: 比較の基準となる変数．
+方法
+- ロジスティック回帰．人種と性別の間に交互作用があるとする
+
+```{r}
+# まずpolviewsの参照カテゴリを変更する
+# relevel()関数で可能
+gss_sm$polviews_m <- relevel(gss_sm$polviews, ref = "Moderate")
+
+out_bo <- glm(formula = obama ~ polviews_m + sex*race,
+              family = "binomial", 
+              data = gss_sm)
+summary(out_bo)
+
+# margins()関数を使ってそれぞれの変数の限界効果を計算する
+bo_m <- margins(out_bo)
+summary(bo_m)
+
+# marginsパッケージに独自の可視化メソッドがある
+# ここではggplot2を用いて可視化する
+
+# まずtibbleに変換する
+bo_gg <- as_tibble(summary(bo_m))
+bo_gg
+
+# factorのラベルを編集する
+prefixes <- c("polviews_m", "sex")
+bo_gg$factor <- prefix_strip(bo_gg$factor, prefixes)
+bo_gg$factor <- prefix_replace(bo_gg$factor, "race", "Race: ")
+
+bo_gg %>% select(factor, AME, lower, upper)
+
+# 作図
+# 平均限界効果の可視化
+p <- ggplot(data = bo_gg,
+            mapping = aes(x = reorder(factor, AME),
+                          y = AME,
+                          ymin = lower, ymax = upper))
+p + geom_hline(yintercept = 0, color = "gray80") + 
+    geom_pointrange() + 
+    coord_flip() + 
+    labs(x = NULL, y = "Average Marginal Effect")
+
+# 変数の条件付き効果を作図する場合
+# 条件付き効果ってなんだ？
+pv_cp <- cplot(out_bo, x = "sex", draw = FALSE)
+pv_cp
+
+p <- ggplot(data = pv_cp,
+            mapping = aes(x = reorder(xvals, yvals), 
+                          y = yvals,
+                          ymin = lower, ymax = upper))
+p + geom_hline(yintercept = 0, color = "gray80") + 
+    geom_pointrange() + 
+    coord_flip() + 
+    labs(x = NULL, y = "Conditional Effect")
+
+```
+
+## 6.8 複雑な調査データの可視化
+社会科学では，複雑な調査デザインの元，収集されたデータを解析する．
+層別化，反復重み付け(対照グループと比較するため)，クラスター構造をもったデータを扱うことも多い．
+これを扱う方法として，Thomas Lumleyが開発したsurveyパッケージおよびGerg Freedman Ellisが開発したsrvyrパッケージがある．
+srvyrパッケージはsurveyパッケージをtidyverseの文法(パイプライン)で書けるようにしたもの．
+
+
+扱うデータ: gss_lon．  
+1972年にGSS(General Social Survey)が始まって以来のGSSの様々な調査値の変動に関するサブセットが含まれている
+行うこと: 1976~2016年までのそれぞれの調査年における，人種ごとの重み付き教育歴の分布を推定する
+
+```{r}
+# パッケージの読み込み
+library(survey)
+library(srvyr)
+
+# データの確認
+glimpse(gss_lon)
+
+options(survey.lonely.psu = "adjust")
+options(na.action = "na.pass")
+
+
+gss_wt <- subset(gss_lon, year > 1974) %>%
+  mutate(stratvar = interaction(year, vstrat)) %>%
+  as_survey_design(ids = vpsu,
+                   strata = stratvar,
+                   weights = wtssall,
+                   nest = TRUE)
+
+# stratvar列: 階層構造の情報である年ごとのサンプリング層の情報
+#   interaction()関数を使って，yearとvstrat変数を組み合わせた，それぞれの年についての階層情報ベクトル
+# 出力として，「1976.7001」のようなyear.vstratの形になる
+# as_survey_design()関数を使って，調査デザインに関する情報を追加する
+# サンプリングID，層(strata)，重み付け(weight)に関する情報を追加する
+
+
+# survey_mean()関数を使って，1976~2016年それぞれの年における人種ごとの教育歴の分布を算出する
+out_grp <- gss_wt %>% 
+  filter(year %in% seq(1976, 2016, by = 4)) %>% 
+  group_by(year, race, degree) %>% 
+  summarize(prop = survey_mean(na.rm = TRUE))
+out_grp
+# 確認
+out_grp %>% group_by(year, race) %>% 
+  summarize(sum = sum(prop))
+# 度数の比率は各年の人種ごとに合計されて1になる
+
+# 各年の人種と教育歴の全ての組み合わせの合計で1にしたい場合は
+# interaction()関数を使って交互作用変数を考えると良い
+out_mrg <- gss_wt %>% 
+  filter(year %in% seq(1976, 2016, by = 4)) %>% 
+  mutate(racedeg = interaction(race, degree)) %>% 
+  group_by(year, racedeg) %>% 
+  summarize(prop = survey_mean(na.rm = TRUE))
+out_mrg
+# 確認
+out_mrg %>% group_by(year) %>% 
+  summarise(total = sum(prop))
+
+# race.degreeのような形で変数を扱いたくない場合も
+# raceとdegreeをそれぞれ別の列で扱いたい
+# separate()関数を使うことで対象列の名前を二つの列に分割できる
+out_mrg <- gss_wt %>% 
+  filter(year %in% seq(1976, 2016, by = 4)) %>% 
+  mutate(racedeg = interaction(race, degree)) %>% 
+  group_by(year, racedeg) %>% 
+  summarize(prop = survey_mean(na.rm = TRUE)) %>% 
+  separate(racedeg, sep = "\\.", into = c("race", "degree"))
+out_mrg
+```
+年別に層別化した場合，どのグラフを使うと良いのかは専門家でも意見が分かれる
+単年度なら棒グラフでも良いが，長期間ののデータなら折れ線グラフを使うのも良い
+
+```{r, fig.width=10}
+# GSSの結果をダイナマイトプロット(棒グラフ±SE)で図示する
+
+p <- ggplot(data = subset(out_grp, race %nin% "Other"),
+            mapping = aes(x = degree,
+                          y = prop,
+                          ymin = prop - 2*prop_se,
+                          ymax = prop + 2*prop_se,
+                          fill = race,
+                          color = race,
+                          group = race))
+dodge <- position_dodge(width = 0.9)
+p + geom_col(position = dodge, alpha = 0.2) + 
+    geom_errorbar(position = dodge, width = 0.2) + 
+    scale_x_discrete(labels = scales::wrap_format(10)) + # 長いラベルを行単位に分割する
+    scale_y_continuous(labels = scales::percent) + 
+    scale_color_brewer(type = "qual", palette = "Dark2") + 
+    scale_fill_brewer(type = "qual", palette = "Dark2") + 
+    labs(x = NULL, y = "Percent",
+         title = "Educational Attainment by Race",
+         fill = "Race", color = "Race") + 
+    facet_wrap(~ year, ncol = 2) + 
+    theme(legend.position = "top")
+# NAが残ったり，グラフの挙動なんかおかしい？
+```
+各年内の内訳を見るには簡単．
+しかしながら年の経過で比較するのは非常に難しい
+
+次に，教育歴をfacetし，x軸を年にする
+```{r, fig.width=7, fig.height=7}
+data <- out_grp %>% 
+  subset(race %nin% "Other") %>% 
+  subset(degree %nin% NA)
+head(data)
+head(out_grp)
+p <- ggplot(data = data,
+            mapping = aes(x = year, y = prop,
+                          ymin = prop - 2*prop_se,
+                          ymax = prop + 2*prop_se,
+                          color = race,
+                          fill = race, 
+                          group = race))
+
+p + geom_ribbon(alpha = 0.3, aes(color = NULL)) + 
+    geom_line() + 
+    facet_wrap(~ degree, ncol = 1) + 
+    scale_y_continuous(labels = scales::percent) + 
+    labs(x = NULL, y = "Percent",
+         title = "Educational Attainment \nby Race",
+         subtitle = "GSS 1976-2016",
+         fill = "Race", color = "Race") + 
+    theme(legend.position = "top")
+
+# graduateがの1976年のデータがない？
+```
+
+## 6.9 次の一手
+モデルを推定し，その結果を可視化する時に難しいのは，モデルから正しく数値を計算・抽出すること  
+そのためにもモデルの理解や関数の中身を理解する必要がある
+
+### 6.9.1 基本機能によるモデルの可視化
+
+```{r}
+glimpse(gapminder)
+out <- lm(formula = lifeExp ~ log(gdpPercap) + pop + continent,
+          data = gapminder)
+summary(out)
+plot(out, which = c(1, 2), ask = FALSE) # wichiで最初の1, 2のグラフを出力すると指定した
+```
+
+coefplotパッケージを使う
+```{r coefplot}
+library(coefplot)
+out <- lm(formula = lifeExp ~ log(gdpPercap) + log(pop) + continent,
+          data = gapminder)
+coefplot(out, sort = "magnitude", intercept = FALSE)
+
+```
+
+### 6.9.2 開発中のパッケージ
+inferパッケージ
+- 開発の初期段階だが，すでに有用なものがある
+
+### 6.9.3 ggplotの拡張に関するパッケージ
+GGallyパッケージ
+- 複雑な図の作成を簡略化するためのパッケージ
+- あくまでも研究者がデータセットの内容を迅速に確認するため
+- さらなる調査に向けて探索的にデータを読み解いていくのが目的
+```{r GGally, fig.width=7, fig.height=7}
+library(GGally)
+
+organdata_sm <- organdata %>% 
+  select(donors, pop_dens, pubhealth, 
+         roads, consent_law)
+?ggpairs
+# upperやlowerは
+ggpairs(data = organdata_sm,
+        mapping = aes(color = consent_law),
+        upper = list(continuous = wrap("density"), combo = "box_no_facet"),
+        lower = list(continuous = wrap("points"), combo = wrap("dot_no_facet")))
+
+ggpairs(data = organdata_sm,
+        mapping = aes(color = consent_law),
+        upper = list(continuous = wrap("density", combo = "box_no_facet")))
+
+
+```

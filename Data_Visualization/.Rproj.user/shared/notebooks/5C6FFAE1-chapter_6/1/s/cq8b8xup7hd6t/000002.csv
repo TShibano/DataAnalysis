@@ -1,0 +1,5 @@
+"0","out_le <- gapminder %>%"
+"0","  group_by(continent, year) %>%"
+"0","  nest(.key = ""hoge"") # .key で名前を変更できる"
+"2","`.key` is deprecated"
+"0","head(out_le)"

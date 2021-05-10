@@ -1,0 +1,57 @@
+"0","# パッケージの読み込み"
+"0","library(survey)"
+"0","library(srvyr)"
+"0",""
+"0","# データの確認"
+"0","glimpse(gss_lon)"
+"1","Rows: 62,466"
+"1",""
+"1","
+"
+"1","Columns: 25"
+"1",""
+"1","
+"
+"1","$ year        [3m[38;5;246m<dbl>[39m[23m 1972, 1972, 1972, 1972, 1972, 1972, 1972, 1972, 1972, 1972, 1…
+$ id          [3m[38;5;246m<dbl>[39m[23m 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18…
+$ ballot      [3m[38;5;246m<labelled>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+$ age         [3m[38;5;246m<labelled>[39m[23m 23, 70, 48, 27, 61, 26, 28, 27, 21, 30, 30, 56, 54, 49, …
+$ degree      [3m[38;5;246m<fct>[39m[23m Bachelor, Lt High School, High School, Bachelor, High School,…
+$ race        [3m[38;5;246m<fct>[39m[23m White, White, White, White, White, White, White, White, Black…
+$ sex         [3m[38;5;246m<fct>[39m[23m Female, Male, Female, Female, Female, Male, Male, Male, Femal…
+$ siblings    [3m[38;5;246m<fct>[39m[23m 3, 4, 5, 5, 2, 1, 6+, 1, 2, 6+, 6+, 6+, 2, 2, 0, 6+, 0, 2, 2,…
+$ kids        [3m[38;5;246m<fct>[39m[23m 0, 4+, 4+, 0, 2, 0, 2, 0, 2, 4+, 1, 4+, 1, 2, 4+, 2, 2, 3, 3,…
+$ bigregion   [3m[38;5;246m<fct>[39m[23m Midwest, Midwest, Midwest, Midwest, Midwest, Midwest, Midwest…
+$ income16    [3m[38;5;246m<fct>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ religion    [3m[38;5;246m<fct>[39m[23m Jewish, Catholic, Protestant, Other, Protestant, Protestant, …
+$ marital     [3m[38;5;246m<fct>[39m[23m Never Married, Married, Married, Married, Married, Never Marr…
+$ padeg       [3m[38;5;246m<fct>[39m[23m Lt High School, Lt High School, Lt High School, Bachelor, Lt …
+$ madeg       [3m[38;5;246m<fct>[39m[23m NA, Lt High School, Lt High School, High School, Lt High Scho…
+$ partyid     [3m[38;5;246m<fct>[39m[23m ""Ind,near Dem"", ""Not Str Democrat"", ""Independent"", ""Not Str D…
+$ polviews    [3m[38;5;246m<fct>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ happy       [3m[38;5;246m<fct>[39m[23m Not Too Happy, Not Too Happy, Pretty Happy, Not Too Happy, Pr…
+$ partners_rc [3m[38;5;246m<fct>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ grass       [3m[38;5;246m<fct>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ zodiac      [3m[38;5;246m<fct>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ pres12      [3m[38;5;246m<labelled>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+$ wtssall     [3m[38;5;246m<dbl>[39m[23m 0.4446, 0.8893, 0.8893, 0.8893, 0.8893, 0.4446, 0.4446, 0.444…
+$ vpsu        [3m[38;5;246m<dbl>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+$ vstrat      [3m[38;5;246m<dbl>[39m[23m NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…"
+"1",""
+"1","
+"
+"0","options(survey.lonely.psu = ""adjust"")"
+"0","options(na.action = ""na.pass"")"
+"0",""
+"0",""
+"0","gss_wt <- subset(gss_lon, year > 1974) %>%"
+"0","  mutate(stratvar = interaction(year, vstrat)) %>%"
+"0","  as_survey_design(ids = vpsu,"
+"0","                   strata = stratvar,"
+"0","                   weights = wtssall,"
+"0","                   nest = TRUE)"
+"0",""
+"0","# stratvar列: 階層構造の情報である年ごとのサンプリング層の情報"
+"0","#   interaction()関数を使って，yearとvstrat変数を組み合わせた，それぞれの年についての階層情報ベクトル"
+"0","# 出力として，「1976.7001」のようなyear.vstratの形になる"
+"0","gss_hoge"

@@ -1,0 +1,22 @@
+"0","?nest"
+"0","# nest()関数によって，"
+"0","# 表形式のまま複雑なオブジェクト(リスト)を保存することができる"
+"0","# unnestを使って対象のデータを取り出すことが可能"
+"0","out_le %>% filter(continent == ""Europe"" & year == 1977)%>% "
+"0","  unnest(cols = c(data))"
+"2","Note: Using an external vector in selections is ambiguous.
+[34mℹ[39m Use `all_of(data)` instead of `data` to silence this message.
+[34mℹ[39m See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+[90mThis message is displayed once per session.[39m
+"
+"2"," エラー: Must subset columns with a valid subscript vector.
+[31mx[39m Subscript has the wrong type `grouped_df<
+  year   : double
+  race   : factor<35866>
+  degree : factor<29603>
+  prop   : double
+  prop_se: double
+>`.
+[34mℹ[39m It must be numeric or character.
+[90mRun `rlang::last_error()` to see where the error occurred.[39m
+"

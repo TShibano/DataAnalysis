@@ -1,0 +1,110 @@
+---
+title: "chapter_2"
+author: "Toshiki SHIBANO"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## まえがき
+写経が大事
+
+## 2.1 プレーンテキストでのR Markdownを使った作業
+- コードを書く
+- 出力を見る
+- メモを取る
+これを全て行えるプレーンテキストで分析作業を全て行う．
+それのおすすめが**R Markdwon**．
+Rで解析だけして，そのほかはWordなどで保存は行うべきではない
+
+
+## 2.2 RとRStudioを利用する
+### 2.2.1 RStudio環境
+R: コンソールのみ
+
+RStudio: IDE(統合開発環境)．色々出来る
+
+### 2.2.2 プロジェクトを作成する
+
+
+## 2.3 Rについて知っておくべきこと
+
+### 2.3.1 すべてに名前がある
+本書では，スネーク記法(df_iris)だが，Google記法によるとdf.iris．私は後者で書いている．
+
+### 2.3.2 すべてがオブジェクト
+```{r}
+my.numbers <- c(1, 2, 3, 1, 3, 5)
+my.numbers
+```
+### 2.3.3 関数を使用する
+```{r}
+my.numbers <- c(1, 2, 3, 1, 3, 5)
+# 平均を求める関数mean()
+mean(my.numbers)
+# 5数要約を求める関数summary()
+summary(my.numbers)
+```
+
+### 2.3.4 パッケージが提供する関数
+```{r}
+# パッケージのインストール
+#install.packages("dplyr")
+# パッケージの使用．新しくファイルを開いたら毎回実行する必要がある
+library(dplyr)
+```
+
+### 2.3.5 オブジェクトのクラスをたずねる
+```{r}
+my.numbers <- c(1, 3, 1, 3, 5)
+class(my.numbers)
+
+# データフレームについて
+library(socviz) # 本書専用のパッケージ
+taitanic <- socviz::titanic # socvizパッケージのタイタニックデータ
+class(titanic)
+taitanic$percent
+# tidyverseではtibble形式のデータフレームがサポートされている
+library(dplyr)
+tb.titanic <- dplyr::as_tibble(titanic)
+tb.titanic
+# tibble形式はデータフレームよりも情報量が多い
+```
+
+### 2.3.6 オブジェクトの内部を見るためにその構造を取得する
+str()関数が便利
+
+
+## 2.4 自分自身，Rへの忍耐
+自分が指定した通りに動く．思い通りに動いてくれるわけではない
+
+
+## 2.5 R にデータを読み込ませる
+```{r}
+library(tidyverse)
+url <- "https://raw.githubusercontent.com/kjhealy/viz-organdata/master/organdonation.csv"
+organs <- readr::read_csv(file = url)
+organs
+class(organs)
+# Rでは欠損値は NA
+# ggplotではtidyなデータを扱う
+# tidy: 全ての観測が一行に記録され，変数が独立した列であること
+```
+
+## 2.6 最初の図を作る
+```{r}
+library(gapminder)
+gapminder
+# 国別の平均寿命や一人当たりのGDP
+p <- ggplot2::ggplot(data = gapminder,
+                     mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point()
+```
+
+## 2.7 次の一手
+次の章に進むのもあり．Rをもう少し詳しく勉強するのもあり．
+RStudioのウェブサイトにRStudioやR Markdown，tidyverseも各パッケージの利用方法を整理したチートシートがある
+

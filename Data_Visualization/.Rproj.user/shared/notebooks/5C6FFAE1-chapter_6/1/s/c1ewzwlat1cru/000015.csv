@@ -1,0 +1,5 @@
+"0","# 確認"
+"0","out_mrg %>% group_by(year) %>% "
+"0","  summarise(total = sum(prop))"
+"2","`summarise()` ungrouping output (override with `.groups` argument)
+"

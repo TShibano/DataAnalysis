@@ -1,0 +1,538 @@
+---
+title: "chapter_5 データの整形・ラベル・メモの追加"
+author: "Toshiki SHIBANO"
+date: "2/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gapminder)
+library(socviz)
+library(ggrepel)
+```
+
+## はじめに
+1. dplyrパッケージを用いて，データの抽出や要約，変換を行う．
+2. geom関数の使い分け
+3. 図をカスタマイズする方法
+必要なのはtidyデータとその変数を審美的要素へマッピングすること，データの可視化に最適な図を選び出すこと．
+
+## 5.1 パイプを使ったデータの集計
+geom_bar()関数に任せきりにすると，意図しない図が出力される．よって先に表の形に集計・加工しておく．その際にデータの操作・整形を行うためのdplyrパッケージを用いる．
+
+これから，gss_smデータセットから各地域における信仰に関連する行で集計し，図を作る．
+
+```{r}
+glimpse(gss_sm)
+
+# 目標: bigregionごとにreligionの割合を表にしたい
+rel.by.region <- gss_sm %>% # gss_smデータセットについて
+                 dplyr::group_by(bigregion, religion) %>% # bigregionでまとめて，さらにreligionでまとめる
+                 dplyr::summarise(N = n()) %>% # まとめたところそれぞれについて個数を集計
+                 dplyr::mutate(freq = N/sum(N), # 新たにfreqとpct変数を計算し，結合させる．この時，bigregionのグループ分けは残っている
+                               pct = round((freq*100), 0))
+rel.by.region
+
+# 以下のように，summarise(.groups = "drop")すると，全てのグループが解除され，以下のmutateでは全体の中の割合を求めることになる
+hoge <- gss_sm %>%
+        dplyr::group_by(bigregion, religion) %>%
+        dplyr::summarise(N = n(),
+                         .groups = "drop") %>% # ここの一文
+        dplyr::mutate(freq = N/sum(N),
+                      pct = round((freq * 100), 0))
+hoge %>% group_by(bigregion) %>% summarise(total = sum(pct))
+
+# 計算の確認．各地域で100%になっているか
+rel.by.region %>% group_by(bigregion) %>% summarise(total = sum(pct))
+
+# ggplotによる作図
+p <- ggplot(data = rel.by.region, 
+            mapping = aes(x = bigregion, y = pct, fill = religion))
+p1 <- p + geom_col(position = "dodge") # 棒の間がない
+p2 <- p + geom_col(position = "dodge2") # 棒の間がある
+p2
+p.all <- ggpubr::ggarrange(p1, p2)
+p.all
+
+# さらに見やすいグラフを作る
+# 具体的には，facetを用いて地域ごとに分ける
+p <- ggplot(data = rel.by.region, 
+            mapping = aes(x = religion, y = pct, fill = religion))
+p + geom_col(position = "dodge2") + 
+    coord_flip() + 
+    labs(x = NULL, y = "Percent", fill = "Religion") + 
+    guides(fill = "none") + 
+    facet_grid(~ bigregion)
+```
+
+
+
+## 5.2 グループ化・カテゴリ化された連続変数の取り扱い
+organdata データセットを用いる．本データセットは，年代・国の構造を持ったデータセットで，17カ国のOECD諸国における移植のための臓器提供意思に関する情報が10年分以上含まれている．いくつかのデータには欠損値を示す"NA"が記されている.
+```{r, fig.width=7}
+organdata
+colnames(organdata)
+glimpse(organdata)
+organdata %>% select(1:6) %>% slice_sample(n = 10) # ランダムにデータをとってくる
+# 年に対するドナーの数をかく
+p <- ggplot(data = organdata, 
+            mapping = aes(x = year, y = donors))
+# よくわからない
+p + geom_point()
+
+# 国別のドナーの数の時系列変化
+p <- ggplot(data = organdata, 
+            mapping = aes(x = year, y = donors))
+p + geom_line(mapping = aes(group = country)) + 
+    facet_wrap(~ country)
+
+# 国別の箱ひげ図
+p <- ggplot(data = organdata,
+            mapping = aes(x = country, y = donors))
+p + geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # x軸の国名を45ºにした
+
+# 横軸にする
+p <- ggplot(data = organdata, 
+            mapping = aes(x = country, y = donors))
+p + geom_boxplot() + coord_flip()
+
+# アルファベット順から大きい順に並び替える
+# reorder関数を用いる．最初の引数のカテゴリを2番目の引数の平均値(設定可能)で並び替える
+p <- ggplot(data = organdata, 
+            mapping = aes(x = reorder(country, donors, na.rm = TRUE),
+                          y = donors))
+p + geom_boxplot() + 
+    labs(x = NULL) + 
+    coord_flip()
+# バイオリンプロット
+p + geom_violin() + 
+    coord_flip()
+
+# fillを使って色分け
+p <- ggplot(data = organdata, 
+            mapping = aes(reorder(country, donors, na.rm = TRUE),
+                          y = donors, fill = world))
+p + geom_boxplot() + 
+    labs(x = NULL) + 
+    coord_flip() + 
+    theme(legend.position = "top")
+
+# 箱ひげ図の代わりに全ての点をプロットするのも良い
+p <- ggplot(data = organdata,
+            mapping = aes(reorder(country, donors, na.rm = TRUE),
+                          y = donors, color = world))
+p + geom_point(alpha = 0.3) + 
+    labs(x = NULL) + 
+    coord_flip() + 
+    theme(legend.position = "top")
+
+# 点が重なって見にくい場合はゆらぎを与える
+p <- ggplot(data = organdata, 
+            mapping = aes(reorder(country, donors, na.rm = TRUE),
+                          y = donors, color = world))
+p0 <- p + geom_point() + 
+      labs(x = NULL, title = "normal") + 
+      coord_flip() + 
+      theme(legend.position = "top")
+p1 <- p + geom_jitter(position = position_jitter(width = 0.15)) + 
+      labs(x = NULL, title = "width") + 
+      coord_flip() + 
+      theme(legend.position = "top")
+p2 <- p + geom_jitter(position = position_jitter(width = 0.15, height = 0.15)) + 
+      labs(x = NULL, title = "width & height") + 
+      coord_flip() + 
+      theme(legend.position = "top")
+p3 <- p + geom_jitter(position = position_jitter(height = 0.15)) + 
+      labs(x = NULL, title = "height") + 
+      coord_flip() +
+      theme(legend.position = "top")
+p.all <- ggpubr::ggarrange(p0, p1, p2, p3)
+p.all
+# jitterのheigthで上下方向の点の散らばりを，widthで左右方向の散らばりを調節
+# この場合，heightをいじるとy軸(donors)が動くので実際の大きさとズレてしまう
+
+# クリーブランドドットプロットを作成する
+# 国ごとの臓器提供率の平均を用いる
+# まずdplyrを用いてデータを作成する
+organdata$consent_law
+colnames(organdata)
+by.country <- organdata %>%
+  group_by(consent_law, country) %>%
+  summarise(donors.mean = mean(donors, na.rm = TRUE),
+            donors.sd = sd(donors, na.rm = TRUE),
+            gdp.mean = mean(gdp, na.rm = TRUE),
+            health.mean = mean(health, na.rm = TRUE),
+            roads.mean = mean(roads, na.rm = TRUE),
+            cerebvas.mean = mean(cerebvas, na.rm = TRUE)
+            )
+by.country
+
+# 年でグループ分けした
+by.year <- organdata %>% 
+  group_by(consent_law, year) %>%
+  summarise(donors.mean = mean(donors, na.rm = TRUE),
+            donors.sd = mean(donors, na.rm = TRUE))
+by.year
+
+# 繰り返しがこれはエレガントではない
+# さらに，他の情報(worldなど)が失われる
+by.country <- organdata %>%
+  group_by(consent_law, country) %>%
+  summarize_if(is.numeric, list(mean = mean, sd = sd), na.rm = TRUE) %>%
+  ungroup()
+by.country
+p <- ggplot(data = by.country, 
+            mapping = aes(x = donors_mean, y = reorder(country, donors_mean, na.rm = TRUE),
+                          color = consent_law))
+p + geom_point(size = 3) + 
+    labs(x = NULL) + 
+    theme(legend.position = "top")
+
+# 標準偏差を付けたい場合
+p1 <- ggplot(data = by.country, 
+            mapping = aes(x = donors_mean, 
+                          y = reorder(country, donors_mean, na.rm = TRUE),
+                          color = consent_law))
+p1 <- p1 + geom_pointrange(mapping = aes(xmin = donors_mean - donors_sd, xmax = donors_mean + donors_sd)) + 
+      labs(x = "Donor Procurement Rate", y = "")
+p2 <- ggplot(data = by.country, 
+            mapping = aes(x = reorder(country, donors_mean, na.rm = TRUE),
+                          y = donors_mean, 
+                          color = consent_law))
+p2 <- p2 + geom_pointrange(mapping = aes(ymin = donors_mean - donors_sd, ymax = donors_mean + donors_sd)) + 
+          labs(x = "", y = "Donor Procurement Rate") + 
+          coord_flip()
+p.all <- ggpubr::ggarrange(p1, p2)
+p.all
+
+# facetを使ってconsent_lawの違いでグラフを分ける
+# facet_wrap(scales = "free_x/y")を設定することでそれぞれ独立にx, yを設定する
+p <- ggplot(data = by.country, 
+            mapping = aes(x = donors_mean,
+                          y = reorder(country, donors_mean, na.rm = TRUE)))
+p + geom_point(size = 3) + 
+    facet_wrap(~consent_law, 
+               scales = "free_y", # デフォルトでは両方の図に全ての国名が表示されるので消す
+               ncol = 1)
+```
+
+## 5.3 図にテキストを直接描画する
+
+```{r, fig.width=7}
+p <- ggplot(data = by.country, 
+            mapping = aes(x = roads_mean, y = donors_mean))
+p + geom_point() + 
+    geom_text(mapping = aes(label = country),
+              hjust = 0 # ラベルの位置を右側に調整する
+              )
+# これらは見にくい
+# もっと良い方法がある
+# ggrepelパッケージを用いる
+p <- ggplot(data = by.country,
+            mapping = aes(x = roads_mean, y = donors_mean, label = country))
+p + geom_point() + 
+    ggrepel::geom_text_repel()
+p + geom_point() + 
+    ggrepel::geom_label_repel()
+
+# elections_historic: 過去のアメリカ大統領選挙に関するデータセット
+# socvizパッケージに入っている
+elections_historic %>% select(2:8) %>% slice_sample(n = 10)
+
+# -----------------------
+# ここから命名方法を.ではなく_を使うことにします
+# -----------------------
+
+p_title <- "Presidential Elections: Popular & Electoral College Margins"
+p_subtitle <- "1824-2016"
+p_caption <- "Data for 2016 are provisional"
+x_label <- "Winner's share of Popular Vote"
+y_label <- "Winner's share of Electoral College Votes"
+p <- ggplot(data = elections_historic,
+            mapping = aes(x = popular_pct, y = ec_pct, label = winner_label))
+p + geom_hline(yintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_vline(xintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_point() + 
+    geom_text_repel() + 
+    scale_x_continuous(labels = scales::percent) + 
+    scale_y_continuous(labels = scales::percent) + 
+    labs(x = x_label, y = y_label, title = p_title, subtitle = p_subtitle, caption = p_caption)
+```
+
+## 5.4 特定のデータへのラベリング
+```{r}
+organdata %>% slice_sample(n = 10)
+
+by_country <- organdata %>%
+  group_by(consent_law, country) %>%
+  summarize_if(is.numeric, list(mean = mean, sd = sd), na.rm = TRUE) %>%
+  ungroup()
+by_country
+
+# gdp_meanが25,000以上のところだけラベル(国名)をつける
+p <- ggplot(data = by_country,
+            mapping = aes(x = gdp_mean, y = health_mean))
+p + geom_point() + 
+    geom_text_repel(data = subset(by_country, gdp_mean > 25000),
+                    mapping = aes(label = country))
+
+# gdp_meanが25,000以上，health_meanが1,500以下，ベルギーにラベルをつける
+p <- ggplot(data = by_country, 
+            mapping = aes(x = gdp_mean, y = health_mean))
+p + geom_point() + 
+    geom_text_repel(data = subset(by_country, 
+                                  gdp_mean > 25000 | health_mean < 1500 | country %in% "Belgium"),
+                    mapping = aes(label = country))
+
+# ダミー変数を使う方法もある
+organdata$ind <- organdata$ccode %in% c("Ita", "Spa") & organdata$year > 1998
+organdata$ind
+p <- ggplot(data = organdata, 
+            mapping = aes(x = roads, y = donors, color = ind))
+p + geom_point() + 
+    geom_text_repel(data = subset(organdata, ind),
+                    mapping = aes(label = ccode)) + 
+    guides(label = "none", color = "none")
+```
+
+## 5.5 図内への描画と書き込み
+annotate()関数を用いる
+```{r}
+p <- ggplot(data = organdata, 
+            mapping = aes(x = roads, y = donors))
+
+# 図に文字を書く
+p + geom_point() + 
+    annotate(geom = "text", 
+             x = 91, y = 33,
+             label = "A surprisingly high \n recovery rate.",
+             hjust = 0)
+
+# 図に色を書き込む
+p + geom_point() + 
+    annotate(geom = "rect", 
+             xmin = 125, xmax = 155, 
+             ymin = 30, ymax = 35,
+             fill = "red", alpha = 0.2) + 
+    annotate(geom = "text", 
+             x = 157, y = 33,
+             label = "A surprisingly high \n recovery rate.",
+             hjust = 0)
+```
+
+## 5.6 scale_関数・guides()関数・theme()関数
+- scale: 図内のマークや目盛りの調整
+- guides: 判例やキー，カラーバーの配置などの編集
+- theme: ラベルのフォントや判例の位置などの調整
+に用いると良い
+
+scale関数の命名規則
+scale_<MAPPING>_<KIND>()
+例
+- scale_x_continuous: 連続変数xのスケールを調節する
+- scale_y_discrete: 離散変数yのスケールを調節する
+- scale_x_log10: 変数xを対数変換する
+
+
+```{r}
+p <- ggplot(data = organdata, 
+            mapping = aes(x = roads, y = donors, color = world))
+p1 <- p + geom_point()
+
+# x軸を対数に，y軸のラベルと位置を書き換える
+p <- ggplot(data = organdata, 
+            mapping = aes(x = roads, y = donors, color = world))
+p2 <- p + geom_point() + 
+    scale_x_log10() + 
+    scale_y_continuous(breaks = c(5, 15, 25), 
+                       labels = c("Five", "Fifteen", "Twenty Five"))
+ggpubr::ggarrange(p1, p2)
+
+# 自分で凡例や軸ラベルを調整する
+p <- ggplot(data = organdata, 
+            mapping = aes(x = roads, y = donors, color = world))
+p + geom_point() + 
+    scale_color_discrete(labels = c("Corporatist", "Liberal", "Social Democratic", "Unclassified")) +
+    labs(x = "Raod Deaths", y = "Donor Procurement", color = "Welfare State")
+
+```
+
+## 5.7 次の一手
+```{r, fig.width=7}
+# elections_historic: 過去のアメリカ大統領選挙に関するデータセット
+# socvizパッケージに入っている
+head(elections_historic, n = 10)
+elections_historic %>% select(2:8) %>% slice_sample(n = 10)
+
+# 人による投票率と選挙人による投票率を比較する
+# 1992年以降のプロットにのみ大統領の名前をつける
+p_title <- "Presidential Elections: Popular & Electoral College Margins"
+p_subtitle <- "1824-2016"
+p_caption <- "Data for 2016 are provisional"
+x_label <- "Winner's share of Popular Vote"
+y_label <- "Winner's share of Electoral College Votes"
+
+p <- ggplot(data = elections_historic,
+            mapping = aes(x = popular_pct, y = ec_pct))
+p + geom_hline(yintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_vline(xintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_point() + 
+    geom_text_repel(data = subset(elections_historic, year >= 1992),
+                    mapping = aes(label = winner_label)) + 
+    scale_x_continuous(labels = scales::percent) + 
+    scale_y_continuous(labels = scales::percent) + 
+    labs(x = x_label, y = y_label, title = p_title, subtitle = p_subtitle, caption = p_caption)
+
+# facet_wrapを用いて大統領の政党ごとにグラフを分けて，人による投票率と選挙人による投票率をプロットする
+head(elections_historic)
+elections_historic %>% filter(win_party == "Rep.")
+unique(elections_historic$win_party)
+# D.-R: 連邦党
+# Dem.: 民主党
+# Whig: ホイッグ党
+# Rep.: 共和党
+p <- ggplot(data = elections_historic,
+            mapping = aes(x = popular_pct, y = ec_pct))
+p + geom_hline(yintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_vline(xintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_point() + 
+    facet_wrap(~ win_party)
+
+# 勝った政党で色分けする
+p <- ggplot(data = elections_historic, 
+            mapping = aes(x = popular_pct, y = ec_pct, color = win_party))
+
+p + theme(text = element_text(family = "HiraKakuProN-W3")) + 　# 日本語を使えるように
+    geom_vline(xintercept = 0.5, size = 1.4 ,color = "gray80") + 
+    geom_hline(yintercept = 0.5, size = 1.4, color = "gray80") + 
+    geom_point(size = 1.5) + 
+    geom_text_repel(mapping = aes(label = winner_label)) + # winner_labelをマッピング
+    labs(x = "国民の投票率", y = "選挙人の投票率", 
+         title = "大統領選挙における国民・選挙人の得票率の違いについて",
+         subtitle = "1824-2016", 
+         caption = "Data for 2016 probisional.") + 
+    scale_color_discrete(name = "win party", 
+                         labels = c("連邦党", "民主党", "共和党", "ホイッグ党")) + 
+    scale_x_continuous(labels = scales::percent) + 
+    scale_y_continuous(labels = scales::percent) + 
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 4)))  # 凡例の点がバグった(点と文字が出る)のでこれを実行して点を更新する
+
+# 第二象限を着色する
+p <- ggplot(data = elections_historic, 
+            mapping = aes(x = popular_pct, y = ec_pct))
+p + annotate(geom = "rect",
+             xmin = 0.3, xmax = 0.5,
+             ymin = 0.5, ymax = 1,
+             fill = "red", alpha = 0.2) + 
+    geom_point() + 
+    scale_x_continuous(labels = scales::percent) + 
+    scale_y_continuous(labels = scales::percent)
+    
+# 国民投票率が高い順に大統領選挙の結果を並び替えたクリーブランドドットプロットを作成する
+p <- ggplot(data = elections_historic,
+            mapping = aes(x = popular_pct, 
+                          y = reorder(winner_label, popular_pct),
+                          color = win_party))
+p + geom_point() +
+    labs(x = NULL, y = "popular percent") + 
+    scale_x_continuous(labels = scales::percent)
+  
+
+```
+
+```{r, fig.width=7}
+# dplyrの使い方をマスターする
+# gss_smデータセットを用いる
+# gss_sm: 米国の成人を対象とした社会科学者が興味のあるトピックについての質問調査票
+colnames(gss_sm)
+
+# 人種ごとに教育歴の割合を計算する
+degree_by_race <- gss_sm %>% 
+  group_by(race, degree) %>%
+  summarise(N = n()) %>%
+  mutate(pct = round(N / sum(N)*100, 0))
+# check
+degree_by_race
+degree_by_race %>% group_by(race) %>% summarise(total = sum(pct))
+# graph
+p <- ggplot(data = degree_by_race, 
+            mapping =aes(x = degree, y = pct, fill = race))
+p + geom_bar(stat = "identity") + 
+    facet_wrap(~race) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+p + geom_col(position = "dodge2")
+
+# 性別ごとに教育歴の割合を計算する
+degree_by_sex <- gss_sm %>%
+  group_by(sex, degree) %>%
+  summarize(N = n()) %>%
+  mutate(pct = round(N / sum(N)*100, 0))
+# check
+degree_by_sex
+degree_by_sex %>% group_by(sex) %>% summarize(total = sum(pct))
+# graph
+p <- ggplot(data = degree_by_sex,
+            mapping = aes(x = degree, y = pct, fill = sex))
+p + geom_col() + 
+    facet_wrap(~ sex) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# こっちの方が男女間の比較はしやすい
+p + geom_col(position = "dodge2")
+
+# 地域ごとに教育歴の割合を計算する
+degree_by_region <- gss_sm %>%
+  group_by(region, degree) %>%
+  summarise(N = n()) %>%
+  mutate(pct = round(N / sum(N)*100, 0))
+# check
+degree_by_region  
+degree_by_region %>% group_by(region) %>% summarize(total = sum(pct))
+p <- ggplot(data = degree_by_region, 
+            mapping = aes(x = degree, y = pct, fill = region))
+p + geom_col(position = "dodge2")
+
+# sum以外の関数も使ってみる
+# 学歴ごとに子供の数を計算する
+child_by_degree <-  gss_sm %>%
+  group_by(degree) %>%
+  summarize(N = n(),
+            mean = mean(childs, na.rm = TRUE),
+            sd = sd(childs, na.rm = TRUE))
+child_by_degree
+p <- ggplot(data = child_by_degree, 
+            mapping = aes(x = mean, y = degree))
+# 平均±標準偏差
+p + geom_pointrange(mapping = aes(xmin = mean-sd, xmax = mean+sd)) + 
+    labs(x = NULL)
+
+p <- ggplot(data = gss_sm,
+            mapping = aes(x = childs, y = degree))
+# 学歴ごとの子供の数の箱ひげ図
+p + geom_boxplot()
+# 学歴ごとの子供の数のバイオリンプロット
+p + geom_violin()
+
+
+```
+
+```{r}
+# gapminderデータセットを用いる
+# 箱ひげ図を使った人口
+glimpse(gapminder)
+
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = year, y = pop, group = year))
+p + geom_boxplot()
+
+# 人口の時間経過のグラフ
+
+
+# 平均寿命の時間経過のグラフ
+
+# 
+
+
+```

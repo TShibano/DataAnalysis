@@ -1,0 +1,5 @@
+"0","# 確認"
+"0","out_grp %>% group_by(year, race) %>% "
+"0","  summarize(sum = sum(prop))"
+"2","`summarise()` regrouping output by 'year' (override with `.groups` argument)
+"

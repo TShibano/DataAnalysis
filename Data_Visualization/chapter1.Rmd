@@ -1,0 +1,73 @@
+---
+title: "chapter_0"
+author: "Toshiki SHIBANO"
+date: "2/3/2021"
+output: 
+  pdf_document:
+    latex_engin: xelatex
+documentclass: bxjsarticle
+classoption: xelatex,ja=standard
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## まえがき
+この本は「なぜこのグラフを書くのか」と「どうやって書くのか」
+の why と how を示している
+
+
+## 0.1 本書で学べること
+R と ggplotを使って可視化を行う
+
+良いグラフが持ってる審美的な特徴を取り上げるだけでなく，
+線・大きさなどの要素の効果が我々の知覚認知昨日に根ざしているかを述べる
+
+ggplot2パッケージはグラフィックスの文法(grammar of graphics)を実装している
+
+#### 学べること
+
+- 効果的なデータ可視化の背後にある基本原理
+- グラフの良し悪しの理由を見極めるセンス
+- Rにおいてggplotを用いた様々なグラフの作図法
+- 効果的なプレゼンテーションのためにグラフを磨き上げる方法
+
+
+## 0.2 正しい心構え
+プログラミングは多くのことが組み合わさっている
+
+しかし，まずやることは**コードを書いて可視化**
+
+それを行ってプログラミングに慣れて，他のことに手を出す
+
+
+## 0.3 本書の使い方
+読むだけでも可視化について理解できる
+
+もっと良い使い方は実際にコードを書いて実行する
+
+## 0.4 表記法
+```{r sample}
+print(4 + 1)
+print(letters)
+```
+
+## 0.5 始める前の準備
+1. Rのインスロール
+2. RStudioのインストール
+3. パッケージのインストール
+
+```{r pressure}
+
+my_packages <- c("tidyverse", "broom", "coefplot", "cowplot",
+                 "gapminder", "GGally", "ggrepel", "ggridges", 
+                 "gridExtra", "here", "interplot", "margins", 
+                 "maps", "mapproj", "mapdata", "MASS", "quantreg",
+                 "rlang", "scales", "survey", "srvyr", "viridis",
+                 "viridisLite", "devtools")
+#install.packages(my_packages)
+# 本書のために特化したパッケージをGitHubからインストール
+# devtools::install_github("kjhealy/socviz")
+```

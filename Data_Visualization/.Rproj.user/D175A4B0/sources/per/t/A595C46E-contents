@@ -1,0 +1,221 @@
+---
+title: "chapter_3"
+author: "Toshiki SHIBANO"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+                      #,fig.width = 8, fig.height = 5)
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(gapminder)
+
+```
+## まえがき
+ゆっくり進める．しかしこの章が終われば，多数の国々の時系列データセットについて，小規模の多次元データプロットを作り，それぞれのパネルに平滑化回帰直線を書き加えることが出来るようになっている
+
+## 3.1 ggplotはどうやって動くのか
+ggplotは，データをプロットの中の視覚的要素としてマッピングし，作り出すプロットの種類を望み通り指定して，それから図の表示方法を詳細に制御することが出来る
+
+1. tidyデータ
+2. マッピング
+3. geom_関数
+4. 座標とメモリ
+5. ラベルとガイド
+```{r}
+colnames(gapminder)
+gapminder
+# tidyデータを渡し，マッピング
+p <- ggplot(data = gapminder,
+            mapping = aes(x = gdpPercap, y = lifeExp, size = pop, color = continent))
+# geom_関数
+p <- p + geom_point()
+# 座標とメモリ
+p <- p + coord_cartesian() + 
+         scale_x_log10()
+# ラベルとガイド
+p <- p + labs(x = "log 10", y = "Life Expectancy", 
+              title = "A Gapminder Plot")
+
+p
+```
+
+## 3.2 tidy データ
+tidyデータは縦長データ
+
+縦長データ: 全ての変数が列(column, 縦)に割り当てられ，観測データは行(row, 横)に分ける．
+
+tidyデータにすることは都合が良い
+
+## 3.3 マッピングがデータと表示物を結びつける
+ggplotにdata.frame形式かtibble形式を与える
+
+```{r}
+p <- ggplot(data = gapminder, # ggplotに使用するデータを与える
+            mapping = aes(x = gdpPercap, y = lifeExp) # 要素として表示する変数を与える
+            )
+p + geom_point() # 散布図を書く
+
+```
+
+## 3.4 プロットをレイヤーごとに作り上げていく
+ggplotは加法性によりプロットを一度に1ステップずつ作り上げる
+```{r}
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+
+# 平均寿命 vs. GDPの平滑化グラフ
+p + geom_smooth()
+
+# 平均寿命 vs. GDPのグラフ．データ点とGAM平滑化曲線
+# 一般化加法モデル(Generalized Additive Model : GAM)
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point() + 
+    geom_smooth(method = "gam")
+
+# 平均寿命 vs. GDPの平滑化グラフ．データ点と不適切な線形近似
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point() + 
+    geom_smooth(method = "lm")
+
+# 平均寿命 vs. GDPの散布図．GAM平滑化曲線と対数x軸
+# 本と違うグラフになっている
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point() + geom_smooth(method = "gam") + scale_x_log10()
+
+# 平均寿命 vs. GDPの散布図．GAM平滑化曲線と対数x軸．軸目盛りのラベルを調整
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point() + 
+    geom_smooth(method = "gam") + 
+    scale_x_log10(labels = scales::dollar)
+
+# 軸メモリをコンマにした
+p + geom_point() + 
+    geom_smooth(method = "gam") +
+    scale_x_log10(labels = scales::comma)
+
+```
+
+## 3.5 審美的要素のマッピングとテーマの設定
+審美的要素のマッピング(aesthetic mapping)では，変数と視覚的要素の1:1の対応関係を指定する
+
+```{r}
+# continentに対応して色分け
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp, color = continent))
+p + geom_point()
+
+# 全ての点を紫にしたい場合は?
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp, color = "purple"))
+p + geom_point() + 
+    geom_smooth(method = "loess") + 
+    scale_x_log10()
+# "pueple"という変数と認識して，Rのリサイクルルールに基づき，全てのデータに対して"purple"という変数を与える．そして，第一のカテゴリの色である赤色が与えられる
+
+# aes()関数はマッピングのためだけに用いる
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point(color = "red") + 
+    geom_smooth(method = "loess", color = "blue", se = FALSE, size = 8) + 
+    scale_x_log10()
+
+?geom_smooth
+# より洗練されたプロット
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+
+p + geom_point(alpha = 0.3) + 
+    geom_smooth(method = "gam", color = "blue") + 
+    scale_x_log10(labels = scales::dollar) + 
+    labs(x = "GDP Per Capita",
+         y = "Life Expectancy in Years",
+         title = "Economic Growth and Life Expectancy", 
+         subtitle = "Data points are country-years",
+         caption = "Source: Gapminder.")
+
+
+# 大陸ごとに作成し，信頼区間も系列の色に一致させる(fillを指定する)
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp, color = continent, fill = continent))
+p + geom_point() + 
+    geom_smooth(method = "loess") + 
+    scale_x_log10()
+
+```
+
+## 3.6 審美的要素はgeomでもマッピング出来る
+geom_関数はggplot関数からマッピングを継承するが，geom_関数だけに対して審美的要素のマッピングが可能
+```{r}
+# 平滑化曲線は一つだけで点は大陸ごとに色分けしたい
+p <- ggplot(data = gapminder, mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point(mapping = aes(color = continent)) + 
+    geom_smooth(method = "loess") + 
+    scale_x_log10()
+
+# 連続量に対してはグラデーションスケールがおすすめ
+p <- ggplot(data = gapminder, mapping = aes(x = gdpPercap, y = lifeExp))
+p + geom_point(mapping = aes(color = log(pop))) + 
+    scale_x_log10()
+```
+ggplotの文法により，判例などの細かいところもきちんと表現されている．
+
+## 3.7 保存しよう
+R Markdownで図のサイズを決定するには{}チャンクオプションで指示する，もしくは最初のコードチャンクで設定する．
+```{r, fig.width=12, fig.height=9}
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = gdpPercap, y = lifeExp))
+p.out <- p + geom_point() + 
+         geom_smooth(method = "loess") + 
+         scale_x_log10()
+
+ggsave("my_figure.png", plot = p.out)
+# 直前に書いたグラフを保存なら
+ggsave("my_figure.png")
+# で良い
+now.dir <- getwd()
+save.dir <- paste(now.dir, "/figure/", sep = "")
+save.dir
+ggsave(paste(save.dir, "my_fugure.jpg", sep = ""), 
+       plot = p.out,
+       height = 10, width = 10,
+       units = "cm")
+
+```
+
+図の保存は新しいフォルダを作ってそこに保存するのが良い．図の保存の際に気をつけるのはベクター形式(PDF, SVG)かラスター形式(JPG, PNG)か．
+
+- ベクター形式: 線・形状・色とそれらの関係性についての情報が一連の指定となって保存されている．図を簡単にリサイズ出来る．
+- ラスター形式: 容量を小さく出来る．画像は事前に大きさが決まっており，リサイズは難しい．
+
+
+## 3.8 次の一手
+色々試そう．
+
+1. 試すこと全てに価値がある
+2. ggplotを使った作業の主な流れはいつも同じ
+
+```{r}
+colnames(gapminder)
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = pop, y = gdpPercap))
+p + geom_smooth() + 
+    geom_point() + 
+    scale_x_sqrt()
+
+p <- ggplot(data = gapminder, 
+            mapping = aes(x = pop, y = gdpPercap, color = year))
+p + geom_point()
+```
+
+
+
+
