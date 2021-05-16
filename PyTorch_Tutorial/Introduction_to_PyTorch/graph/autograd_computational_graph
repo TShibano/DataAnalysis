@@ -1,0 +1,34 @@
+digraph {
+	graph [rankdir=LR]
+	node [shape=circle]
+	newrank=true
+	X
+	"+"
+	"*"
+	z
+	CE
+	y
+	loss
+	y
+	X -> "*"
+	"*" -> "+"
+	"+" -> z
+	z -> CE
+	CE -> loss
+	subgraph cluster0 {
+		b
+		w
+		label=parameters labelloc=t
+	}
+{rank=same; "w"; "*"}
+{rank=same; "b", "+"}
+{rank=same; "y"; "CE"}
+	w -> "*"
+	b -> "+"
+	y -> CE
+	subgraph cluster0 {
+		b
+		w
+		label=parameters labelloc=t
+	}
+}
