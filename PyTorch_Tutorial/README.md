@@ -5,11 +5,14 @@
 
 内容は
 
-- Introduction to PyTorch
+- Introduction to PyTorch(2021/05/16)
+
+次の予定
+
+- Learning PyTorch
 
 今後の予定は
 
-- Learning PyTorch
 - Deploying PyTorch Models in Production
 - Extending PyTorch
 - Mdeol Optimization
